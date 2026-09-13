@@ -82,6 +82,18 @@ bool SerialFileReceiver::processCommand(Inkplate& display) {
         return false;
     }
 
+    if (lineBuf_.size() >= 7 && lineBuf_.compare(0, 7, "SETTIME") == 0) {
+        if (lineBuf_.size() <= 8 || lineBuf_[7] != ' ') {
+            fail("usage: SETTIME <epoch>");
+            return false;
+        }
+        uint32_t epoch = static_cast<uint32_t>(strtoul(lineBuf_.c_str() + 8, nullptr, 10));
+        display.rtc.setEpoch(epoch);
+        Serial.print("TIME SET ");
+        Serial.println(epoch);
+        return false;
+    }
+
     if (lineBuf_.size() < 6 || lineBuf_.compare(0, 6, "UPLOAD") != 0 ||
         (lineBuf_.size() > 6 && lineBuf_[6] != ' ')) {
         return false;

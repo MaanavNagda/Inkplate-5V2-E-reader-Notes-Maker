@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <ctime>
 
 namespace {
     constexpr uint8_t FULL_REFRESH_EVERY = 50;
@@ -28,6 +29,10 @@ namespace {
     constexpr uint16_t BG_LIGHT = 0;
     constexpr uint16_t FG_DARK = 0;
     constexpr uint16_t BG_DARK = 7;
+
+    constexpr uint32_t STATUS_CHECK_MS   = 1000;          // poll RTC once a second
+    constexpr uint32_t BATTERY_CHECK_MS  = 30 * 1000;     // poll battery every 30 s
+    constexpr uint32_t FULL_REFRESH_MS   = 10 * 60 * 1000; // full refresh every 10 min
 
     const GFXfont* const BodyFont    = &FreeSans15pt7b;  // smooth book text
     const GFXfont* const UIFont      = &FreeSans12pt7b;  // smooth UI labels
@@ -434,12 +439,33 @@ void EReaderApp::begin(AppManager& manager) {
     bookmarks_.clear();
     bookmarkIdx_ = 0;
     refreshCount_ = 0;
+    lastStatusCheckMs_ = 0;
+    lastBatteryCheckMs_ = 0;
+    lastFullRefreshMs_ = millis();
+    statusHour_ = statusMinute_ = statusDay_ = statusMonth_ = statusYear_ = -1;
+    lastBatteryPct_ = -1;
+    rtcOk_ = false;
+    statusForceFull_ = false;
     reader_.close();
 }
 
 void EReaderApp::update(uint32_t dtMs) {
     (void)dtMs;
-    if (needsRender_ && manager_) {
+    if (!manager_) return;
+
+    if (state_ == State::READER) {
+        uint32_t now = millis();
+        if (now - lastStatusCheckMs_ >= STATUS_CHECK_MS) {
+            lastStatusCheckMs_ = now;
+            checkStatusRow();
+        }
+        if (now - lastFullRefreshMs_ >= FULL_REFRESH_MS) {
+            statusForceFull_ = true;
+            needsRender_ = true;
+        }
+    }
+
+    if (needsRender_) {
         render(manager_->display());
     }
 }
@@ -471,10 +497,12 @@ void EReaderApp::render(Inkplate& display) {
         case State::EXITING:   drawExiting(display); break;
     }
 
-    bool full = (state_ == State::READER && refreshCount_ == 0) ||
+    bool full = (state_ == State::READER && (refreshCount_ == 0 || statusForceFull_)) ||
                 (state_ != State::READER && state_ != State::LIBRARY);
     if (full) {
         display.display();
+        lastFullRefreshMs_ = millis();
+        statusForceFull_ = false;
     } else {
         display.partialUpdate(INKPLATE_FORCE_PARTIAL, false);
     }
@@ -580,15 +608,92 @@ void EReaderApp::drawReader(Inkplate& display) {
         if (display.getCursorY() > display.height() - 30) break;
     }
 
-    char counter[32];
-    snprintf(counter, sizeof(counter), "%zu / %zu", currentPage_ + 1, pages_.size());
+    drawStatusRow(display);
+}
+
+void EReaderApp::checkStatusRow() {
+    Inkplate& display = manager_->display();
+    uint32_t now = millis();
+
+    // RTC: isSet() and getEpoch() each perform one I2C transaction.
+    rtcOk_ = display.rtc.isSet();
+    uint32_t epoch = display.rtc.getEpoch();
+    time_t t = (time_t)epoch;
+    struct tm* tm = localtime(&t);
+    if (tm) {
+        int minute = tm->tm_min;
+        int day = tm->tm_mday;
+        if (minute != statusMinute_ || day != statusDay_) {
+            statusHour_   = tm->tm_hour;
+            statusMinute_ = minute;
+            statusDay_    = day;
+            statusMonth_  = tm->tm_mon + 1;
+            statusYear_   = tm->tm_year + 1900;
+            needsRender_  = true;
+        }
+    }
+
+    // Battery: slower poll, partial-refresh only when the level changes.
+    if (now - lastBatteryCheckMs_ >= BATTERY_CHECK_MS) {
+        lastBatteryCheckMs_ = now;
+        double v = display.readBattery();
+        int pct = (int)((v - 3.3) / (4.2 - 3.3) * 100.0);
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+        if (pct != lastBatteryPct_) {
+            lastBatteryPct_ = pct;
+            needsRender_ = true;
+        }
+    }
+}
+
+void EReaderApp::drawStatusRow(Inkplate& display) {
     display.setFont(PageNumFont);
     display.setTextSize(1);
+    applyColors(display);
+    int16_t baseY = display.height() - 30;
+    int16_t x = MARGIN_X;
     int16_t x1, y1;
     uint16_t w, h;
-    display.getTextBounds(counter, 0, 0, &x1, &y1, &w, &h);
-    display.setCursor(display.width() - MARGIN_X - w, display.height() - 30);
-    display.print(counter);
+    char buf[48];
+
+    // Battery icon + level.
+    int batt = lastBatteryPct_ < 0 ? 0 : lastBatteryPct_;
+    drawBatteryIcon(display, x, baseY - 14, batt);
+    x += 30;
+    snprintf(buf, sizeof(buf), "%d%%", batt);
+    display.setCursor(x, baseY);
+    display.print(buf);
+    x = display.getCursorX() + 22;
+
+    // Time (24h).
+    if (rtcOk_) snprintf(buf, sizeof(buf), "%02d:%02d", statusHour_, statusMinute_);
+    else        snprintf(buf, sizeof(buf), "--:--");
+    display.setCursor(x, baseY);
+    display.print(buf);
+    x = display.getCursorX() + 22;
+
+    // Date.
+    if (rtcOk_) snprintf(buf, sizeof(buf), "%02d/%02d/%04d", statusDay_, statusMonth_, statusYear_);
+    else        snprintf(buf, sizeof(buf), "--/--/----");
+    display.setCursor(x, baseY);
+    display.print(buf);
+
+    // Right: progress % + page counter.
+    int pct = pages_.empty() ? 0 : (int)((currentPage_ + 1) * 100 / pages_.size());
+    snprintf(buf, sizeof(buf), "%d%%  %zu / %zu", pct, currentPage_ + 1, pages_.size());
+    display.getTextBounds(buf, 0, 0, &x1, &y1, &w, &h);
+    display.setCursor(display.width() - MARGIN_X - w, baseY);
+    display.print(buf);
+}
+
+void EReaderApp::drawBatteryIcon(Inkplate& display, int16_t x, int16_t y, int pct) {
+    uint16_t fg = darkMode_ ? FG_DARK : FG_LIGHT;
+    int16_t w = 22, h = 12;
+    display.drawRect(x, y, w, h, fg);                  // outline
+    display.fillRect(x + w, y + 3, 2, h - 6, fg);      // nub
+    int16_t fillW = (int16_t)((w - 4) * (int32_t)pct / 100);
+    if (fillW > 0) display.fillRect(x + 2, y + 2, fillW, h - 4, fg);
 }
 
 void EReaderApp::drawMenu(Inkplate& display) {
