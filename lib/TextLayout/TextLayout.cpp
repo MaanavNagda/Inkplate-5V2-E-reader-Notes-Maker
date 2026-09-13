@@ -32,18 +32,21 @@ std::vector<std::string> TextLayout::pages() const {
     std::vector<std::string> lines = wrapWords(charsPerLine);
     std::ostringstream page;
     uint16_t lineCount = 0;
-    for (const auto& line : lines) {
+    for (size_t i = 0; i < lines.size(); ++i) {
         if (lineCount > 0) page << '\n';
-        page << line;
+        page << lines[i];
         ++lineCount;
         if (lineCount == linesPerPage) {
             result.push_back(page.str());
+            // Start the next page with the last line of this one.
+            std::string carry = lines[i];
             page.str("");
             page.clear();
-            lineCount = 0;
+            page << carry;
+            lineCount = 1;
         }
     }
-    if (lineCount > 0) {
+    if (lineCount > 0 && (result.empty() || lineCount > 1)) {
         result.push_back(page.str());
     }
     return result;

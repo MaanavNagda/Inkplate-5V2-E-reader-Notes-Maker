@@ -13,7 +13,7 @@ namespace {
     constexpr uint8_t FULL_REFRESH_EVERY = 50;
     constexpr uint8_t TEXT_SIZE = 1;           // native font scaling
     constexpr uint16_t CHAR_W = 13;              // FreeSans12pt7b average xAdvance
-    constexpr uint16_t CHAR_H = 27;              // FreeSans12pt7b yAdvance (line height)
+    constexpr uint16_t CHAR_H = 29;              // FreeSans12pt7b yAdvance (line height)
     constexpr uint16_t MARGIN_X = 20;
     constexpr uint16_t MARGIN_Y = 80;
     constexpr uint16_t EPUB_LEFT_MARGIN  = 40;
