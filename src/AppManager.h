@@ -25,6 +25,15 @@ public:
     void setSleepManager(SleepManager& sm);
     void enterDeepSleep();
 
+    // SleepManager sets this after a light-sleep wake; the next render should do
+    // a full refresh to re-sync the panel (partial updates artefact after sleep).
+    void requestPostSleepFullRefresh() { postSleepFullRefresh_ = true; }
+    bool consumePostSleepFullRefresh() {
+        bool f = postSleepFullRefresh_;
+        postSleepFullRefresh_ = false;
+        return f;
+    }
+
     Inkplate& display() const { return display_; }
     ButtonHandler& buttons() const { return buttons_; }
 
@@ -36,6 +45,7 @@ private:
     App* current_ = nullptr;
     SleepManager* sleepManager_ = nullptr;
     uint32_t lastUpdateMs_ = 0;
+    bool postSleepFullRefresh_ = false;
 };
 
 #endif

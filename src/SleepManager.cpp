@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <esp_sleep.h>
+#include <soc/i2s_struct.h>
 #include "Inkplate.h"
 #include "AppManager.h"
 #include "App.h"
@@ -107,6 +108,12 @@ void SleepManager::enterLightSleep() {
     esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_WAKE_US);
 
     esp_light_sleep_start();
+
+    // Light sleep resets the I2S peripheral that drives the panel, so re-init it
+    // before the next update. The first update after a wake must also be a full
+    // refresh — a partial update on a just-woken panel produces column artefacts.
+    display_.I2SInit(&I2S1);
+    appManager_.requestPostSleepFullRefresh();
 
     if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
         // Button press — real activity; stay awake and reset the inactivity clock.

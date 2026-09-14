@@ -124,8 +124,10 @@ void AppSelector::render(Inkplate& display) {
     // Bottom status row (battery / time / date), light mode.
     statusRow_.draw(display, false, false);
 
-    // Status changes partial-refresh; first draw and the 10-minute timer go full.
-    bool full = !statusUpdate_ || statusRow_.fullRefreshDue();
+    // Status changes partial-refresh; first draw, the 10-minute timer, and the
+    // first update after a light-sleep wake go full.
+    bool full = !statusUpdate_ || statusRow_.fullRefreshDue() ||
+                manager_->consumePostSleepFullRefresh();
     if (full) {
         display.display();
         statusRow_.noteFullRefresh();

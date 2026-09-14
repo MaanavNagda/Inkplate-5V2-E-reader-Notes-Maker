@@ -394,6 +394,7 @@ std::string EpubReader::cleanHtml(const std::string& html) {
     }
 
     out = decodeEntities(out);
+    out = normalizeUtf8(out);
     return collapseSpace(out);
 }
 
@@ -462,6 +463,144 @@ std::string EpubReader::decodeEntities(const std::string& text) {
         } else {
             out += text[i++];
         }
+    }
+    return out;
+}
+
+// Map a non-ASCII code point to an ASCII string the GFX font can render, or
+// nullptr if there is no reasonable equivalent (the character is dropped).
+static const char* cpToAscii(uint32_t cp) {
+    switch (cp) {
+        // Single quotes / apostrophes / primes.
+        case 0x2018: case 0x2019: case 0x201A: case 0x201B:
+        case 0x2032: case 0x02BC: case 0x0060: case 0x00B4:
+            return "'";
+        // Double quotes / double primes.
+        case 0x201C: case 0x201D: case 0x201E: case 0x201F:
+        case 0x2033: case 0x00AB: case 0x00BB:
+            return "\"";
+        // Dashes and minus signs.
+        case 0x2012: case 0x2013: case 0x2015: case 0x2212:
+            return "-";
+        case 0x2014:
+            return "--";
+        // Ellipsis.
+        case 0x2026:
+            return "...";
+        // Spaces.
+        case 0x00A0: case 0x2000: case 0x2001: case 0x2002: case 0x2003:
+        case 0x2004: case 0x2005: case 0x2006: case 0x2007: case 0x2008:
+        case 0x2009: case 0x200A: case 0x202F: case 0x205F: case 0x3000:
+            return " ";
+        // Bullets / middots.
+        case 0x2022: case 0x00B7: case 0x2027: case 0x2219:
+            return "*";
+        // Ligatures.
+        case 0xFB00: return "ff"; case 0xFB01: return "fi";
+        case 0xFB02: return "fl"; case 0xFB03: return "ffi";
+        case 0xFB04: return "ffl";
+        // Copyright / registered / trademark.
+        case 0x00A9: return "(c)"; case 0x00AE: return "(R)";
+        case 0x2122: return "TM";
+        // Currency / maths that have rough ASCII forms.
+        case 0x00A3: return "GBP"; case 0x20AC: return "EUR";
+        case 0x00A5: return "YEN"; case 0x00A2: return "c";
+        case 0x00D7: return "x";  case 0x00F7: return "/";
+        case 0x00B0: return "deg"; case 0x00B1: return "+/-";
+        case 0x00BC: return "1/4"; case 0x00BD: return "1/2";
+        case 0x00BE: return "3/4";
+        default: break;
+    }
+
+    // Accented Latin letters -> base letter (Latin-1 Supplement + a few
+    // Latin Extended-A characters common in European languages).
+    switch (cp) {
+        case 0x00C0: case 0x00C1: case 0x00C2: case 0x00C3: case 0x00C4:
+        case 0x00C5: case 0x0100: case 0x0102: case 0x0104: return "A";
+        case 0x00E0: case 0x00E1: case 0x00E2: case 0x00E3: case 0x00E4:
+        case 0x00E5: case 0x0101: case 0x0103: case 0x0105: return "a";
+        case 0x00C6: return "AE"; case 0x00E6: return "ae";
+        case 0x00C7: case 0x0106: case 0x0108: case 0x010A: case 0x010C: return "C";
+        case 0x00E7: case 0x0107: case 0x0109: case 0x010B: case 0x010D: return "c";
+        case 0x00D0: case 0x010E: case 0x0110: return "D";
+        case 0x00F0: case 0x010F: case 0x0111: return "d";
+        case 0x00C8: case 0x00C9: case 0x00CA: case 0x00CB:
+        case 0x0112: case 0x0114: case 0x0116: case 0x0118: case 0x011A: return "E";
+        case 0x00E8: case 0x00E9: case 0x00EA: case 0x00EB:
+        case 0x0113: case 0x0115: case 0x0117: case 0x0119: case 0x011B: return "e";
+        case 0x011C: case 0x011E: case 0x0120: case 0x0122: return "G";
+        case 0x011D: case 0x011F: case 0x0121: case 0x0123: return "g";
+        case 0x0124: case 0x0126: return "H"; case 0x0125: case 0x0127: return "h";
+        case 0x00CC: case 0x00CD: case 0x00CE: case 0x00CF:
+        case 0x0128: case 0x012A: case 0x012C: case 0x012E: case 0x0130: return "I";
+        case 0x00EC: case 0x00ED: case 0x00EE: case 0x00EF:
+        case 0x0129: case 0x012B: case 0x012D: case 0x012F: case 0x0131: return "i";
+        case 0x0134: return "J"; case 0x0135: return "j";
+        case 0x0136: return "K"; case 0x0137: return "k";
+        case 0x0139: case 0x013B: case 0x013D: case 0x013F: case 0x0141: return "L";
+        case 0x013A: case 0x013C: case 0x013E: case 0x0140: case 0x0142: return "l";
+        case 0x00D1: case 0x0143: case 0x0145: case 0x0147: return "N";
+        case 0x00F1: case 0x0144: case 0x0146: case 0x0148: return "n";
+        case 0x00D2: case 0x00D3: case 0x00D4: case 0x00D5: case 0x00D6:
+        case 0x00D8: case 0x014C: case 0x014E: case 0x0150: return "O";
+        case 0x00F2: case 0x00F3: case 0x00F4: case 0x00F5: case 0x00F6:
+        case 0x00F8: case 0x014D: case 0x014F: case 0x0151: return "o";
+        case 0x0152: return "OE"; case 0x0153: return "oe";
+        case 0x0154: case 0x0156: case 0x0158: return "R";
+        case 0x0155: case 0x0157: case 0x0159: return "r";
+        case 0x015A: case 0x015C: case 0x015E: case 0x0160: return "S";
+        case 0x015B: case 0x015D: case 0x015F: case 0x0161: return "s";
+        case 0x00DE: return "TH"; case 0x00FE: return "th";
+        case 0x0162: case 0x0164: case 0x0166: return "T";
+        case 0x0163: case 0x0165: case 0x0167: return "t";
+        case 0x00D9: case 0x00DA: case 0x00DB: case 0x00DC:
+        case 0x0168: case 0x016A: case 0x016C: case 0x016E: case 0x0170:
+        case 0x0172: return "U";
+        case 0x00F9: case 0x00FA: case 0x00FB: case 0x00FC:
+        case 0x0169: case 0x016B: case 0x016D: case 0x016F: case 0x0171:
+        case 0x0173: return "u";
+        case 0x0174: return "W"; case 0x0175: return "w";
+        case 0x00DD: case 0x0176: case 0x0178: return "Y";
+        case 0x00FD: case 0x00FF: case 0x0177: return "y";
+        case 0x0179: case 0x017B: case 0x017D: return "Z";
+        case 0x017A: case 0x017C: case 0x017E: return "z";
+        case 0x00DF: return "ss";
+        default: return nullptr;
+    }
+}
+
+std::string EpubReader::normalizeUtf8(const std::string& text) {
+    std::string out;
+    out.reserve(text.size());
+    size_t i = 0;
+    while (i < text.size()) {
+        unsigned char c = static_cast<unsigned char>(text[i]);
+        if (c < 0x80) {                 // ASCII already
+            out += static_cast<char>(c);
+            ++i;
+            continue;
+        }
+        // Decode one UTF-8 code point.
+        uint32_t cp = 0;
+        size_t len = 0;
+        if      ((c & 0xE0) == 0xC0) { cp = c & 0x1F; len = 2; }
+        else if ((c & 0xF0) == 0xE0) { cp = c & 0x0F; len = 3; }
+        else if ((c & 0xF8) == 0xF0) { cp = c & 0x07; len = 4; }
+        else { ++i; continue; }        // stray continuation byte — drop it
+        if (i + len > text.size()) break;
+        bool ok = true;
+        for (size_t k = 1; k < len; ++k) {
+            unsigned char cc = static_cast<unsigned char>(text[i + k]);
+            if ((cc & 0xC0) != 0x80) { ok = false; break; }
+            cp = (cp << 6) | (cc & 0x3F);
+        }
+        if (!ok) { ++i; continue; }
+        i += len;
+
+        if (const char* ascii = cpToAscii(cp)) {
+            out += ascii;
+        }
+        // else: no ASCII equivalent — drop the character.
     }
     return out;
 }

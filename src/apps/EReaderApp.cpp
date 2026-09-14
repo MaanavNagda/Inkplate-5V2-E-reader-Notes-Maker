@@ -478,7 +478,8 @@ void EReaderApp::render(Inkplate& display) {
         case State::EXITING:   drawExiting(display); break;
     }
 
-    bool full = (state_ == State::READER && (refreshCount_ == 0 || statusRow_.fullRefreshDue())) ||
+    bool full = manager_->consumePostSleepFullRefresh() ||
+                (state_ == State::READER && (refreshCount_ == 0 || statusRow_.fullRefreshDue())) ||
                 (state_ != State::READER && state_ != State::LIBRARY);
     if (full) {
         display.display();

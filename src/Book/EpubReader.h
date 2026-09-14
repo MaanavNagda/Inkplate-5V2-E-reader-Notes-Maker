@@ -57,6 +57,9 @@ private:
     std::string extractFile(const char* zipPath);
     static std::string cleanHtml(const std::string& html);
     static std::string decodeEntities(const std::string& text);
+    // Fold raw UTF-8 punctuation/accented characters down to ASCII so the
+    // GFX font (which only has 0x20-0x7E glyphs) can render them.
+    static std::string normalizeUtf8(const std::string& text);
     static std::string extractBetween(const std::string& s, const std::string& start,
                                       const std::string& end);
     static std::string getAttribute(const std::string& tag, const std::string& attr);
