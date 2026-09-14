@@ -2,6 +2,7 @@
 #define APP_SELECTOR_H
 
 #include "../App.h"
+#include "../StatusRow.h"
 
 class AppSelector : public App {
 public:
@@ -13,6 +14,8 @@ public:
     void onButton(ButtonAction action) override;
 private:
     bool needsRender_ = true;
+    bool statusUpdate_ = false;   // render triggered by a status change (partial ok)
+    StatusRow statusRow_;
 };
 
 #endif

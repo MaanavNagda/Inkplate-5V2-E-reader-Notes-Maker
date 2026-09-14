@@ -2,6 +2,7 @@
 #define EREADER_APP_H
 
 #include "../App.h"
+#include "../StatusRow.h"
 #include "Book/EpubReader.h"
 
 #include <cstdint>
@@ -43,18 +44,8 @@ private:
 
     uint8_t refreshCount_ = 0;
 
-    // Bottom status row (battery / time / date) tracking.
-    uint32_t lastStatusCheckMs_ = 0;
-    uint32_t lastBatteryCheckMs_ = 0;
-    uint32_t lastFullRefreshMs_ = 0;
-    int statusHour_ = -1;
-    int statusMinute_ = -1;
-    int statusDay_ = -1;
-    int statusMonth_ = -1;
-    int statusYear_ = -1;
-    int lastBatteryPct_ = -1;
-    bool rtcOk_ = false;
-    bool statusForceFull_ = false;
+    // Bottom status row (battery / time / date), shared with the other apps.
+    StatusRow statusRow_;
 
     void applyColors(Inkplate& display);
     void clearBackground(Inkplate& display);
@@ -72,9 +63,7 @@ private:
     void drawMenu(Inkplate& display);
     void drawBookmarks(Inkplate& display);
     void drawExiting(Inkplate& display);
-    void drawStatusRow(Inkplate& display);
-    void drawBatteryIcon(Inkplate& display, int16_t x, int16_t y, int pct);
-    void checkStatusRow();
+    void drawPageCounter(Inkplate& display);
 
     bool hasBookmark(size_t chapter, size_t page) const;
     void toggleBookmark();

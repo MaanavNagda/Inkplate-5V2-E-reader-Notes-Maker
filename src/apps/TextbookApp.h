@@ -2,6 +2,7 @@
 #define TEXTBOOK_APP_H
 
 #include "../App.h"
+#include "../StatusRow.h"
 
 #include <cstdint>
 #include <string>
@@ -40,6 +41,9 @@ private:
     int8_t selectedDigit_ = 0;
 
     uint8_t refreshCount_ = 0;
+
+    // Bottom status row (battery / time / date), shared with the other apps.
+    StatusRow statusRow_;
 
     void applyColors(Inkplate& display);
     void clearBackground(Inkplate& display);

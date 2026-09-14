@@ -193,7 +193,13 @@ void TextbookApp::begin(AppManager& manager) {
 
 void TextbookApp::update(uint32_t dtMs) {
     (void)dtMs;
-    if (needsRender_ && manager_) {
+    if (!manager_) return;
+
+    if (state_ == State::READER && statusRow_.poll(manager_->display())) {
+        needsRender_ = true;
+    }
+
+    if (needsRender_) {
         render(manager_->display());
     }
 }
@@ -221,6 +227,7 @@ void TextbookApp::render(Inkplate& display) {
         }
 
         display.display();
+        statusRow_.noteFullRefresh();
         needsRender_ = false;
         return;
     }
@@ -312,6 +319,10 @@ void TextbookApp::drawReader(Inkplate& display) {
         display.setCursor(MARGIN_X, 120);
         display.print("Could not draw page");
     }
+
+    // Status row over the bottom of the page (light mode; fill a strip so the
+    // text stays readable over the image).
+    statusRow_.draw(display, false, true);
 }
 
 void TextbookApp::drawMenu(Inkplate& display) {

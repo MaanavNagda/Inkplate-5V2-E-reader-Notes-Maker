@@ -82,13 +82,21 @@ void AppSelector::begin(AppManager& manager) {
 
 void AppSelector::update(uint32_t dtMs) {
     (void)dtMs;
-    if (needsRender_ && manager_) {
+    if (!manager_) return;
+
+    if (statusRow_.poll(manager_->display())) {
+        needsRender_ = true;
+        statusUpdate_ = true;
+    }
+
+    if (needsRender_) {
         render(manager_->display());
     }
 }
 
 void AppSelector::render(Inkplate& display) {
     display.setRotation(0);      // Landscape home screen
+    display.selectDisplayMode(INKPLATE_1BIT);
     display.clearDisplay();
     display.fillScreen(APP_WHITE);
     display.setTextColor(APP_BLACK, APP_WHITE);
@@ -113,9 +121,18 @@ void AppSelector::render(Inkplate& display) {
     drawBox(display, GRID_X + 2 * step, GRID_Y, "Notes", "keyboard", drawNotesIcon);
     drawBox(display, GRID_X + 3 * step, GRID_Y, "Notes + Text", "keyboard", drawSplitIcon);
 
-    Serial.printf("AppSelector einkOn: %d\n", display.einkOn());
-    display.display();
-    Serial.println("AppSelector display done");
+    // Bottom status row (battery / time / date), light mode.
+    statusRow_.draw(display, false, false);
+
+    // Status changes partial-refresh; first draw and the 10-minute timer go full.
+    bool full = !statusUpdate_ || statusRow_.fullRefreshDue();
+    if (full) {
+        display.display();
+        statusRow_.noteFullRefresh();
+    } else {
+        display.partialUpdate(INKPLATE_FORCE_PARTIAL, false);
+    }
+    statusUpdate_ = false;
     needsRender_ = false;
 }
 

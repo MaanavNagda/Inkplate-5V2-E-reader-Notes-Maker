@@ -11,6 +11,8 @@ class SleepManager {
 public:
     static constexpr uint32_t LIGHT_SLEEP_MS = 2UL * 60UL * 1000UL;
     static constexpr uint32_t DEEP_SLEEP_MS = 15UL * 60UL * 1000UL;
+    // While light-sleeping, wake this often so the on-screen clock can refresh.
+    static constexpr uint64_t LIGHT_SLEEP_WAKE_US = 30ULL * 1000ULL * 1000ULL;
 
     SleepManager(Inkplate& display, AppManager& appManager);
 

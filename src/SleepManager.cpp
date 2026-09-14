@@ -89,7 +89,10 @@ void SleepManager::showScreensaverAndDeepSleep() {
     sleepAppId = static_cast<uint32_t>(appManager_.currentAppId());
     sleepMagic = SLEEP_MAGIC;
 
-    // Wake only on the WAKE button (GPIO 36, active low).
+    // Wake only on the WAKE button (GPIO 36, active low). Clear the periodic
+    // timer / ext1 sources used by light sleep so they don't fire in deep sleep.
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_EXT1);
     esp_sleep_enable_ext0_wakeup(GPIO_NUM_36, LOW);
     esp_deep_sleep_start();
 }
@@ -97,15 +100,22 @@ void SleepManager::showScreensaverAndDeepSleep() {
 void SleepManager::enterLightSleep() {
     Serial.println("Entering light sleep");
 
-    // Any button press wakes light sleep.
+    // Wake on any button press, and periodically so the on-screen clock can
+    // refresh while the device is idle.
     uint64_t mask = (1ULL << GPIO_NUM_36) | (1ULL << GPIO_NUM_0);
     esp_sleep_enable_ext1_wakeup(mask, ESP_EXT1_WAKEUP_ALL_LOW);
+    esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_WAKE_US);
 
     esp_light_sleep_start();
 
-    // Woken by a button; reset the inactivity clock.
-    lastActivityMs_ = millis();
-    inLightSleep_ = true;
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
+        // Button press — real activity; stay awake and reset the inactivity clock.
+        lastActivityMs_ = millis();
+        inLightSleep_ = true;
+    }
+    // Timer wake: leave inLightSleep_ false and don't touch lastActivityMs_, so
+    // the loop runs once (refreshing the status row) then re-enters light sleep,
+    // and the deep-sleep countdown keeps running.
 }
 
 void SleepManager::update(uint32_t nowMs, bool activity) {
